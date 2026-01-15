@@ -35,7 +35,8 @@ class Visualizer:
         self.max_age_display: int = 50
         self.age_grid: np.ndarray | None = None
         self.historical_grid: np.ndarray | None = None
-        self.ax3d: plt.Axes | None = None
+        self.ax_heatmap: plt.Axes | None = None
+        self.heatmap_img: Any = None
 
         self.buttons: dict[str, Button] = {}
 
@@ -46,12 +47,12 @@ class Visualizer:
         gs = self.fig.add_gridspec(2, 2, height_ratios=[3, 1])
 
         self.ax = self.fig.add_subplot(gs[0, 0])
-        self.ax3d = self.fig.add_subplot(gs[0, 1], projection="3d")
+        self.ax_heatmap = self.fig.add_subplot(gs[0, 1])
         self.pop_ax = self.fig.add_subplot(gs[1, :])
 
         self.fig.subplots_adjust(bottom=0.15, hspace=0.3)
         self._setup_grid_axes()
-        self._setup_3d_axes()
+        self._setup_heatmap_axes()
         self._setup_population_axes()
         self._setup_buttons()
         self._record_population()
@@ -93,19 +94,17 @@ class Visualizer:
         self.pop_ax.set_title("Population Over Time")
         (self.pop_line,) = self.pop_ax.plot([], [], color="black", linewidth=1.5)
 
-    def _setup_3d_axes(self) -> None:
-        """Configure the 3D life history bar plot."""
-        self.ax3d.set_title("Life Heatmap")
-        self.ax3d.set_xlabel("X")
-        self.ax3d.set_ylabel("Y")
-        self.ax3d.set_zlabel("Cumulative Life")
-
-        self._bar_x, self._bar_y = np.meshgrid(
-            np.arange(self.grid.width),
-            np.arange(self.grid.height)
+    def _setup_heatmap_axes(self) -> None:
+        """Configure the 2D life history heatmap."""
+        self.ax_heatmap.set_title("Life Heatmap")
+        self.ax_heatmap.tick_params(length=0, labelbottom=False, labelleft=False)
+        self.heatmap_img = self.ax_heatmap.imshow(
+            self.historical_grid,
+            cmap="binary",
+            interpolation="nearest",
+            vmin=0,
+            vmax=1,
         )
-        self._bar_x = self._bar_x.ravel()
-        self._bar_y = self._bar_y.ravel()
 
 
     def _setup_buttons(self) -> None:
@@ -115,33 +114,36 @@ class Visualizer:
         button_y = 0.02
         button_spacing = 0.09
 
-        ax_normal = self.fig.add_axes([0.05, button_y, button_width, button_height])
-        ax_decay = self.fig.add_axes([0.05 + button_spacing, button_y, button_width, button_height])
-        ax_age = self.fig.add_axes([0.05 + 2 * button_spacing, button_y, button_width, button_height])
-        ax_3d = self.fig.add_axes([0.05 + 3 * button_spacing, button_y, button_width, button_height])
+        left_start = 0.05
+        ax_normal = self.fig.add_axes([left_start, button_y, button_width, button_height])
+        ax_decay = self.fig.add_axes([left_start + button_spacing, button_y, button_width, button_height])
+        ax_age = self.fig.add_axes([left_start + 2 * button_spacing, button_y, button_width, button_height])
+
+        right_end = 0.95
+        ax_YlOrRd = self.fig.add_axes([right_end - button_width, button_y, button_width, button_height])
+        ax_binary = self.fig.add_axes([right_end - button_width - button_spacing, button_y, button_width, button_height])
 
         self.buttons["normal"] = Button(ax_normal, "Normal")
         self.buttons["decay"] = Button(ax_decay, "Trail")
         self.buttons["age"] = Button(ax_age, "Age")
-        self.buttons["3d"] = Button(ax_3d, "3D")
+        self.buttons["binary"] = Button(ax_binary, "Binary")
+        self.buttons["YlOrRd"] = Button(ax_YlOrRd, "YlOrRd")
+
 
         self.buttons["normal"].on_clicked(lambda _: self._set_display_mode("normal"))
         self.buttons["decay"].on_clicked(lambda _: self._set_display_mode("decay"))
         self.buttons["age"].on_clicked(lambda _: self._set_display_mode("age"))
-        self.buttons["3d"].on_clicked(lambda _: self._set_display_mode("3d"))
+        self.buttons["binary"].on_clicked(lambda _: self._set_cmap("binary"))
+        self.buttons["YlOrRd"].on_clicked(lambda _: self._set_cmap("YlOrRd"))
 
     def _set_display_mode(self, mode: str) -> None:
         """Switch display mode and update colormap."""
         self.display_mode = mode
-        if mode == "normal":
-            self.img.set_cmap(self.cmap)
-        elif mode == "decay":
-            # self.img.set_cmap("YlOrRd")
-            pass
-        elif mode == "age":
-            self.img.set_cmap("YlOrRd")
-        elif mode == "3d":
-            pass
+
+    def _set_cmap(self, colorway: str) -> None:
+        self.img.set_cmap(colorway)
+        self.heatmap_img.set_cmap(colorway)
+
 
     def _update_title(self) -> None:
         """Show which generation we're on."""
@@ -188,25 +190,12 @@ class Visualizer:
             (self.age_grid[self.grid.cells > 0] / self.max_age_display), 1.0)
         return display
 
-    def _update_3d_plot(self) -> None:
-        """Update the 3D bar plot with cumulative life history."""
-        self.ax3d.cla()
-        self.ax3d.set_title("Life Heatmap")
-        self.ax3d.set_xlabel("X")
-        self.ax3d.set_ylabel("Y")
-        self.ax3d.set_zlabel("Cumulative Life")
-
-        heights = self.historical_grid.ravel()
-        if heights.max() > 0:
-            colors = plt.cm.YlOrRd(heights / heights.max())
-        else:
-            colors = plt.cm.YlOrRd(np.zeros_like(heights))
-
-        self.ax3d.bar3d(
-            self._bar_x, self._bar_y, np.zeros_like(heights),
-            0.8, 0.8, heights,
-            color=colors, alpha=0.8
-        )
+    def _update_heatmap(self) -> None:
+        """Update the 2D heatmap with cumulative life history."""
+        max_val = self.historical_grid.max()
+        self.heatmap_img.set_array(self.historical_grid)
+        if max_val > 0:
+            self.heatmap_img.set_clim(0, max_val)
 
     def _animate_frame(self, frame: int) -> tuple[Any, ...]:
         """Called each frame - step the sim and redraw."""
@@ -229,8 +218,8 @@ class Visualizer:
         self.pop_ax.relim()
         self.pop_ax.autoscale_view()
         self.stats_text.set_text(self._get_stats())
-        self._update_3d_plot()
-        return (self.img, self.pop_line, self.stats_text)
+        self._update_heatmap()
+        return (self.img, self.pop_line, self.stats_text, self.heatmap_img)
 
     def animate(
         self,
