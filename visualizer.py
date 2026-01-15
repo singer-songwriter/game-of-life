@@ -29,15 +29,22 @@ class Visualizer:
         self.generation_history: list[int] = []
         self.pop_line: Any = None
         self.pop_ax: plt.Axes | None = None
+        self.stats_text: Any = None
 
     def _setup_figure(self) -> None:
         """Get the matplotlib window ready."""
         self.fig, (self.ax, self.pop_ax) = plt.subplots(
             1, 2,
-            figsize = (self.figsize[0] + 4, self.figsize[1]),
-            gridspec_kw = {"width_ratios" : [3, 1]},
+            figsize=(self.figsize[0] + 4, self.figsize[1]),
+            gridspec_kw={"width_ratios": [3, 1]},
         )
+        self._setup_grid_axes()
+        self._setup_population_axes()
+        self._record_population()
+        self._update_title()
 
+    def _setup_grid_axes(self) -> None:
+        """Configure the main grid display."""
         self.ax.set_xticks(np.arange(-0.5, self.grid.width, 1), minor=True)
         self.ax.set_yticks(np.arange(-0.5, self.grid.height, 1), minor=True)
         self.ax.tick_params(which="both", length=0, labelbottom=False, labelleft=False)
@@ -49,26 +56,24 @@ class Visualizer:
             interpolation="nearest",
             vmin=0,
             vmax=1,
-        )   
+        )
+        self.stats_text = self.ax.text(
+            0.02, 0.98,
+            "",
+            transform=self.ax.transAxes,
+            fontsize=10,
+            color="white",
+            verticalalignment="top",
+            bbox=dict(boxstyle="round", facecolor="black", alpha=0.7),
+        )
+        self.stats_text.set_text(self._get_stats())
 
+    def _setup_population_axes(self) -> None:
+        """Configure the population history plot."""
         self.pop_ax.set_xlabel("Generation")
         self.pop_ax.set_ylabel("Population")
         self.pop_ax.set_title("Population Over Time")
         (self.pop_line,) = self.pop_ax.plot([], [], color="green", linewidth=1.5)
-
-        self.stats_text = self.ax.text(
-            0.02, 0.98,
-            "",
-            transform = self.ax.transAxes,
-            fontsize = 10,
-            color = "white",
-            verticalalignment = "top",
-            bbox = dict(boxstyle = "round", facecolor = "black", alpha = 0.7)
-        )
-        
-        self.stats_text.set_text(self._get_stats())
-        self._record_population()
-        self._update_title()
 
     def _update_title(self) -> None:
         """Show which generation we're on."""
