@@ -2,6 +2,7 @@ from typing import Any
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from matplotlib.colors import ListedColormap
+from matplotlib.widgets import Button
 import numpy as np
 
 from game_of_life import Grid
@@ -28,8 +29,12 @@ class Visualizer:
         self.pop_line: Any = None
         self.pop_ax: plt.Axes | None = None
         self.stats_text: Any = None
-        # self.decay_frames: int = 5
-        # self.decay_grid: np.ndarray | None = None
+        self.display_mode: str = "normal"
+        self.decay_frames: int = 5
+        self.decay_grid: np.ndarray | None = None
+        self.max_age_display: int = 50
+        self.age_grid: np.ndarray | None = None
+        self.buttons: dict[str, Button] = {}
 
     def _setup_figure(self) -> None:
         """Get the matplotlib window ready."""
@@ -38,8 +43,10 @@ class Visualizer:
             figsize=(self.figsize[0] + 4, self.figsize[1]),
             gridspec_kw={"width_ratios": [3, 1]},
         )
+        self.fig.subplots_adjust(bottom=0.1)
         self._setup_grid_axes()
         self._setup_population_axes()
+        self._setup_buttons()
         self._record_population()
         self._update_title()
 
@@ -52,7 +59,7 @@ class Visualizer:
         self.ax.set_aspect("equal")
         self.img = self.ax.imshow(
             self.grid.cells.astype(np.float32),
-            cmap=self.cmap,
+            cmap= self.cmap, #"YlOrRd"
             interpolation="nearest",
             vmin=0,
             vmax=1,
@@ -67,9 +74,9 @@ class Visualizer:
             bbox=dict(boxstyle="round", facecolor="black", alpha=0.7),
         )
         self.stats_text.set_text(self._get_stats())
-        # self.decay_grid = np.zeros_like(self.grid.cells, dtype=np.float32)
-        # self.decay_grid[self.grid.cells == 0] = self.decay_frames + 1
-
+        self.decay_grid = np.zeros_like(self.grid.cells, dtype=np.float32)
+        self.decay_grid[self.grid.cells == 0] = self.decay_frames + 1
+        self.age_grid = np.zeros_like(self.grid.cells, dtype=np.float32)
 
     def _setup_population_axes(self) -> None:
         """Configure the population history plot."""
@@ -78,10 +85,44 @@ class Visualizer:
         self.pop_ax.set_title("Population Over Time")
         (self.pop_line,) = self.pop_ax.plot([], [], color="green", linewidth=1.5)
 
+    def _setup_buttons(self) -> None:
+        """Add display mode toggle buttons."""
+        button_width = 0.08
+        button_height = 0.04
+        button_y = 0.02
+        button_spacing = 0.09
+
+        ax_normal = self.fig.add_axes([0.05, button_y, button_width, button_height])
+        ax_decay = self.fig.add_axes([0.05 + button_spacing, button_y, button_width, button_height])
+        ax_age = self.fig.add_axes([0.05 + 2 * button_spacing, button_y, button_width, button_height])
+
+        self.buttons["normal"] = Button(ax_normal, "Normal")
+        self.buttons["decay"] = Button(ax_decay, "Trail")
+        self.buttons["age"] = Button(ax_age, "Age")
+
+        self.buttons["normal"].on_clicked(lambda _: self._set_display_mode("normal"))
+        self.buttons["decay"].on_clicked(lambda _: self._set_display_mode("decay"))
+        self.buttons["age"].on_clicked(lambda _: self._set_display_mode("age"))
+
+    def _set_display_mode(self, mode: str) -> None:
+        """Switch display mode and update colormap."""
+        self.display_mode = mode
+        if mode == "normal":
+            self.img.set_cmap(self.cmap)
+        elif mode == "decay":
+            # self.img.set_cmap("YlOrRd")
+            pass
+        elif mode == "age":
+            self.img.set_cmap("YlOrRd")
+
     def _update_title(self) -> None:
         """Show which generation we're on."""
         if self.ax:
             self.ax.set_title(f"Generation {self.grid.generation}")
+
+    def _update_ages(self) -> None:
+        self.age_grid[(self.grid.cells == 1)] += 1
+        self.age_grid[(self.grid.cells == 0)] = 0
 
     def _get_stats(self) -> str:
         """Calculate statistics on the game"""
@@ -95,29 +136,44 @@ class Visualizer:
         self.generation_history.append(self.grid.generation)
         self.population_history.append(int(np.sum(self.grid.cells)))
 
-    # def _update_decay(self, previous_cells: np.ndarray) -> np.ndarray:
-    #     just_died = (previous_cells == 1) & (self.grid.cells == 0)
-    #     self.decay_grid[just_died] = 1
+    def _update_decay(self, previous_cells: np.ndarray) -> None:
+        just_died = (previous_cells == 1) & (self.grid.cells == 0)
+        self.decay_grid[just_died] = 1
 
-    #     still_dead = (previous_cells == 0) & (self.grid.cells == 0)
-    #     self.decay_grid[still_dead] += 1
+        still_dead = (previous_cells == 0) & (self.grid.cells == 0)
+        self.decay_grid[still_dead] += 1
 
-    #     self.decay_grid[self.grid.cells == 1] = 0
+        self.decay_grid[self.grid.cells == 1] = 0
 
-    #     display = np.zeros_like(self.decay_grid)
-    #     display[self.grid.cells == 1] = 1.0
-    #     fading = (self.grid.cells == 0) & (self.decay_grid <= self.decay_frames)
-    #     display[fading] = 0.3 * (1.0 - (self.decay_grid[fading] / self.decay_frames))
-    #     return display
+    def _get_decay_display(self) -> np.ndarray:
+        display = np.zeros_like(self.decay_grid)
+        display[self.grid.cells == 1] = 1.0
+        fading = (self.grid.cells == 0) & (self.decay_grid <= self.decay_frames)
+        display[fading] = 0.3 * (1.0 - (self.decay_grid[fading] / self.decay_frames))
+        return display
+
+    def _get_age_display(self) -> np.ndarray:
+        display = np.zeros_like(self.age_grid)
+        display[self.grid.cells > 0] = 0.1 + 0.9 * np.minimum(
+            (self.age_grid[self.grid.cells > 0] / self.max_age_display), 1.0)
+        return display
 
     def _animate_frame(self, frame: int) -> tuple[Any, ...]:
         """Called each frame - step the sim and redraw."""
         previous_cells = self.grid.cells.copy()
         self.grid.step()
         self._record_population()
-        # display = self._update_decay(previous_cells)
-        # self.img.set_array(display)
-        self.img.set_array(self.grid.cells)
+
+        self._update_decay(previous_cells)
+        self._update_ages()
+
+        if self.display_mode == "decay":
+            self.img.set_array(self._get_decay_display())
+        elif self.display_mode == "age":
+            self.img.set_array(self._get_age_display())
+        else:
+            self.img.set_array(self.grid.cells)
+
         self._update_title()
         self.pop_line.set_data(self.generation_history, self.population_history)
         self.pop_ax.relim()
