@@ -38,7 +38,6 @@ class Visualizer:
             gridspec_kw = {"width_ratios" : [3, 1]},
         )
 
-        # self.fig, self.ax = plt.subplots(figsize=self.figsize)
         self.ax.set_xticks(np.arange(-0.5, self.grid.width, 1), minor=True)
         self.ax.set_yticks(np.arange(-0.5, self.grid.height, 1), minor=True)
         self.ax.tick_params(which="both", length=0, labelbottom=False, labelleft=False)
@@ -77,12 +76,14 @@ class Visualizer:
             self.ax.set_title(f"Generation {self.grid.generation}")
 
     def _get_stats(self) -> str:
+        """Calculate statistics on the game"""
         alive = int(np.sum(self.grid.cells))
         total = self.grid.width * self.grid.height
         percent = (alive / total) * 100
         return f"Alive: {alive} ({percent:.1f}%)"
     
     def _record_population(self) -> None:
+        """Records the generation and population, x/y"""
         self.generation_history.append(self.grid.generation)
         self.population_history.append(int(np.sum(self.grid.cells)))
 
