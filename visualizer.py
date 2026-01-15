@@ -149,12 +149,12 @@ class Visualizer:
         display = np.zeros_like(self.decay_grid)
         display[self.grid.cells == 1] = 1.0
         fading = (self.grid.cells == 0) & (self.decay_grid <= self.decay_frames)
-        display[fading] = 0.3 * (1.0 - (self.decay_grid[fading] / self.decay_frames))
+        display[fading] = 0.5 * (1.0 - (self.decay_grid[fading] / self.decay_frames))
         return display
 
     def _get_age_display(self) -> np.ndarray:
         display = np.zeros_like(self.age_grid)
-        display[self.grid.cells > 0] = 0.1 + 0.9 * np.minimum(
+        display[self.grid.cells > 0] = 0.15 + 0.9 * np.minimum(
             (self.age_grid[self.grid.cells > 0] / self.max_age_display), 1.0)
         return display
 
