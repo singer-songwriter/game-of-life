@@ -29,13 +29,10 @@ class Visualizer:
     def _setup_figure(self) -> None:
         """Get the matplotlib window ready."""
         self.fig, self.ax = plt.subplots(figsize=self.figsize)
-        self.ax.set_xticks([])
-        self.ax.set_yticks([])
         self.ax.set_xticks(np.arange(-0.5, self.grid.width, 1), minor=True)
         self.ax.set_yticks(np.arange(-0.5, self.grid.height, 1), minor=True)
-        self.ax.tick_params(which="minor", length=0)
+        self.ax.tick_params(which="both", length=0, labelbottom=False, labelleft=False)
         self.ax.grid(which="minor", color="gray", linestyle="dotted", linewidth=0.5, alpha=0.3)
-        self.ax.set_axisbelow(False)
         self.ax.set_aspect("equal")
         self.img = self.ax.imshow(
             self.grid.cells,
