@@ -71,7 +71,7 @@ class Visualizer:
             self._animate_frame,
             frames=generations,
             interval=interval,
-            blit=True,
+            blit=False,
             repeat=False,
         )
 
