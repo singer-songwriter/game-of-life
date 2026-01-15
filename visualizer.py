@@ -41,6 +41,18 @@ class Visualizer:
             vmin=0,
             vmax=1,
         )
+
+        self.stats_text = self.ax.text(
+            0.02, 0.98,
+            "",
+            transform = self.ax.transAxes,
+            fontsize = 10,
+            color = "white",
+            verticalalignment = "top",
+            bbox = dict(boxstyle = "round", facecolor = "black", alpha = 0.7)
+        )
+        
+        self.stats_text.set_text(self._get_stats())
         self._update_title()
 
     def _update_title(self) -> None:
@@ -48,12 +60,19 @@ class Visualizer:
         if self.ax:
             self.ax.set_title(f"Generation {self.grid.generation}")
 
+    def _get_stats(self) -> str:
+        alive = int(np.sum(self.grid.cells))
+        total = self.grid.width * self.grid.height
+        percent = (alive / total) * 100
+        return f"Alive: {alive} ({percent:.1f}%)"
+
     def _animate_frame(self, frame: int) -> tuple[Any, ...]:
         """Called each frame - step the sim and redraw."""
         self.grid.step()
         self.img.set_array(self.grid.cells)
         self._update_title()
-        return (self.img,)
+        self.stats_text.set_text(self._get_stats())
+        return (self.img, self.stats_text)
 
     def animate(
         self,
