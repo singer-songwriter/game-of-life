@@ -1,5 +1,3 @@
-"""The guts of Game of Life."""
-
 from typing import Iterator
 import numpy as np
 from numpy.typing import NDArray

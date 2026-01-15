@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Run it from the command line."""
 
 import argparse
 from game_of_life import Grid, PATTERNS

@@ -1,5 +1,3 @@
-"""Watch the cells do their thing."""
-
 from typing import Any
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
@@ -30,6 +28,8 @@ class Visualizer:
         self.pop_line: Any = None
         self.pop_ax: plt.Axes | None = None
         self.stats_text: Any = None
+        # self.decay_frames: int = 5
+        # self.decay_grid: np.ndarray | None = None
 
     def _setup_figure(self) -> None:
         """Get the matplotlib window ready."""
@@ -51,7 +51,7 @@ class Visualizer:
         self.ax.grid(which="minor", color="gray", linestyle="dotted", linewidth=0.5, alpha=0.3)
         self.ax.set_aspect("equal")
         self.img = self.ax.imshow(
-            self.grid.cells,
+            self.grid.cells.astype(np.float32),
             cmap=self.cmap,
             interpolation="nearest",
             vmin=0,
@@ -67,6 +67,9 @@ class Visualizer:
             bbox=dict(boxstyle="round", facecolor="black", alpha=0.7),
         )
         self.stats_text.set_text(self._get_stats())
+        # self.decay_grid = np.zeros_like(self.grid.cells, dtype=np.float32)
+        # self.decay_grid[self.grid.cells == 0] = self.decay_frames + 1
+
 
     def _setup_population_axes(self) -> None:
         """Configure the population history plot."""
@@ -92,10 +95,28 @@ class Visualizer:
         self.generation_history.append(self.grid.generation)
         self.population_history.append(int(np.sum(self.grid.cells)))
 
+    # def _update_decay(self, previous_cells: np.ndarray) -> np.ndarray:
+    #     just_died = (previous_cells == 1) & (self.grid.cells == 0)
+    #     self.decay_grid[just_died] = 1
+
+    #     still_dead = (previous_cells == 0) & (self.grid.cells == 0)
+    #     self.decay_grid[still_dead] += 1
+
+    #     self.decay_grid[self.grid.cells == 1] = 0
+
+    #     display = np.zeros_like(self.decay_grid)
+    #     display[self.grid.cells == 1] = 1.0
+    #     fading = (self.grid.cells == 0) & (self.decay_grid <= self.decay_frames)
+    #     display[fading] = 0.3 * (1.0 - (self.decay_grid[fading] / self.decay_frames))
+    #     return display
+
     def _animate_frame(self, frame: int) -> tuple[Any, ...]:
         """Called each frame - step the sim and redraw."""
+        previous_cells = self.grid.cells.copy()
         self.grid.step()
         self._record_population()
+        # display = self._update_decay(previous_cells)
+        # self.img.set_array(display)
         self.img.set_array(self.grid.cells)
         self._update_title()
         self.pop_line.set_data(self.generation_history, self.population_history)
