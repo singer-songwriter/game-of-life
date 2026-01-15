@@ -34,17 +34,24 @@ class Visualizer:
         self.decay_grid: np.ndarray | None = None
         self.max_age_display: int = 50
         self.age_grid: np.ndarray | None = None
+        self.historical_grid: np.ndarray | None = None
+        self.ax3d: plt.Axes | None = None
+
         self.buttons: dict[str, Button] = {}
 
     def _setup_figure(self) -> None:
         """Get the matplotlib window ready."""
-        self.fig, (self.ax, self.pop_ax) = plt.subplots(
-            1, 2,
-            figsize=(self.figsize[0] + 4, self.figsize[1]),
-            gridspec_kw={"width_ratios": [3, 1]},
-        )
-        self.fig.subplots_adjust(bottom=0.1)
+
+        self.fig = plt.figure(figsize=(self.figsize[0] * 2, self.figsize[1] * 1.2))
+        gs = self.fig.add_gridspec(2, 2, height_ratios=[3, 1])
+
+        self.ax = self.fig.add_subplot(gs[0, 0])
+        self.ax3d = self.fig.add_subplot(gs[0, 1], projection="3d")
+        self.pop_ax = self.fig.add_subplot(gs[1, :])
+
+        self.fig.subplots_adjust(bottom=0.15, hspace=0.3)
         self._setup_grid_axes()
+        self._setup_3d_axes()
         self._setup_population_axes()
         self._setup_buttons()
         self._record_population()
@@ -77,13 +84,29 @@ class Visualizer:
         self.decay_grid = np.zeros_like(self.grid.cells, dtype=np.float32)
         self.decay_grid[self.grid.cells == 0] = self.decay_frames + 1
         self.age_grid = np.zeros_like(self.grid.cells, dtype=np.float32)
+        self.historical_grid = np.zeros_like(self.grid.cells, dtype=np.float32)
 
     def _setup_population_axes(self) -> None:
         """Configure the population history plot."""
         self.pop_ax.set_xlabel("Generation")
         self.pop_ax.set_ylabel("Population")
         self.pop_ax.set_title("Population Over Time")
-        (self.pop_line,) = self.pop_ax.plot([], [], color="green", linewidth=1.5)
+        (self.pop_line,) = self.pop_ax.plot([], [], color="black", linewidth=1.5)
+
+    def _setup_3d_axes(self) -> None:
+        """Configure the 3D life history bar plot."""
+        self.ax3d.set_title("Life Heatmap")
+        self.ax3d.set_xlabel("X")
+        self.ax3d.set_ylabel("Y")
+        self.ax3d.set_zlabel("Cumulative Life")
+
+        self._bar_x, self._bar_y = np.meshgrid(
+            np.arange(self.grid.width),
+            np.arange(self.grid.height)
+        )
+        self._bar_x = self._bar_x.ravel()
+        self._bar_y = self._bar_y.ravel()
+
 
     def _setup_buttons(self) -> None:
         """Add display mode toggle buttons."""
@@ -95,14 +118,17 @@ class Visualizer:
         ax_normal = self.fig.add_axes([0.05, button_y, button_width, button_height])
         ax_decay = self.fig.add_axes([0.05 + button_spacing, button_y, button_width, button_height])
         ax_age = self.fig.add_axes([0.05 + 2 * button_spacing, button_y, button_width, button_height])
+        ax_3d = self.fig.add_axes([0.05 + 3 * button_spacing, button_y, button_width, button_height])
 
         self.buttons["normal"] = Button(ax_normal, "Normal")
         self.buttons["decay"] = Button(ax_decay, "Trail")
         self.buttons["age"] = Button(ax_age, "Age")
+        self.buttons["3d"] = Button(ax_3d, "3D")
 
         self.buttons["normal"].on_clicked(lambda _: self._set_display_mode("normal"))
         self.buttons["decay"].on_clicked(lambda _: self._set_display_mode("decay"))
         self.buttons["age"].on_clicked(lambda _: self._set_display_mode("age"))
+        self.buttons["3d"].on_clicked(lambda _: self._set_display_mode("3d"))
 
     def _set_display_mode(self, mode: str) -> None:
         """Switch display mode and update colormap."""
@@ -114,6 +140,8 @@ class Visualizer:
             pass
         elif mode == "age":
             self.img.set_cmap("YlOrRd")
+        elif mode == "3d":
+            pass
 
     def _update_title(self) -> None:
         """Show which generation we're on."""
@@ -122,6 +150,8 @@ class Visualizer:
 
     def _update_ages(self) -> None:
         self.age_grid[(self.grid.cells == 1)] += 1
+        self.historical_grid[(self.grid.cells == 1)] += 1
+
         self.age_grid[(self.grid.cells == 0)] = 0
 
     def _get_stats(self) -> str:
@@ -158,6 +188,26 @@ class Visualizer:
             (self.age_grid[self.grid.cells > 0] / self.max_age_display), 1.0)
         return display
 
+    def _update_3d_plot(self) -> None:
+        """Update the 3D bar plot with cumulative life history."""
+        self.ax3d.cla()
+        self.ax3d.set_title("Life Heatmap")
+        self.ax3d.set_xlabel("X")
+        self.ax3d.set_ylabel("Y")
+        self.ax3d.set_zlabel("Cumulative Life")
+
+        heights = self.historical_grid.ravel()
+        if heights.max() > 0:
+            colors = plt.cm.YlOrRd(heights / heights.max())
+        else:
+            colors = plt.cm.YlOrRd(np.zeros_like(heights))
+
+        self.ax3d.bar3d(
+            self._bar_x, self._bar_y, np.zeros_like(heights),
+            0.8, 0.8, heights,
+            color=colors, alpha=0.8
+        )
+
     def _animate_frame(self, frame: int) -> tuple[Any, ...]:
         """Called each frame - step the sim and redraw."""
         previous_cells = self.grid.cells.copy()
@@ -179,6 +229,7 @@ class Visualizer:
         self.pop_ax.relim()
         self.pop_ax.autoscale_view()
         self.stats_text.set_text(self._get_stats())
+        self._update_3d_plot()
         return (self.img, self.pop_line, self.stats_text)
 
     def animate(
