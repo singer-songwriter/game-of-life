@@ -79,6 +79,26 @@ class Grid:
         self.cells.fill(0)
         self.generation = 0
 
+class ToroidalGrid(Grid):
+    """A slightly different world where cells live and die.
+
+    Neighbor logic is its own method so you can subclass and
+    make weird topologies - toruses, hexagons, whatever.
+    """
+
+    def get_neighbors(self, x: int, y: int) -> Iterator[Position]:
+        """The 8 cells surrounding this one (minus anything off the edge).
+
+        Override this to make edges wrap, add portals, go hexagonal, etc.
+        """
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                if dx == 0 and dy == 0:
+                    continue
+                nx = (x + dx) % self.width
+                ny = (y + dy) % self.height
+                yield (nx, ny)
+
 
 # Some classic patterns to play with
 PATTERNS: dict[str, list[Position]] = {

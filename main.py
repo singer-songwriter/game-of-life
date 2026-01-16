@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
-from game_of_life import Grid, PATTERNS
+from game_of_life import Grid, ToroidalGrid, PATTERNS
 from visualizer import Visualizer
 
 
@@ -56,13 +56,18 @@ def main() -> None:
         type=str,
         help="Save to gif or mp4",
     )
+    parser.add_argument(
+        "-t", "--toroidal",
+        action="store_true",
+        help="Use toroidal grid (wrapping edges)",
+    )
 
     args = parser.parse_args()
 
     width = args.width or args.size
     height = args.height or args.size
 
-    grid = Grid(width, height)
+    grid = ToroidalGrid(width, height) if args.toroidal else Grid(width, height)
 
     if args.pattern == "random":
         grid.randomize(args.density)
