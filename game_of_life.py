@@ -8,11 +8,7 @@ CellState = int  # 0 = dead, 1 = alive
 
 
 class Grid:
-    """The world where cells live and die.
-
-    Neighbor logic is its own method so you can subclass and
-    make weird topologies - toruses, hexagons, whatever.
-    """
+    """The world where cells live and die."""
 
     def __init__(self, width: int, height: int) -> None:
         self.width = width
@@ -21,10 +17,7 @@ class Grid:
         self.generation = 0
 
     def get_neighbors(self, x: int, y: int) -> Iterator[Position]:
-        """The 8 cells surrounding this one (minus anything off the edge).
-
-        Override this to make edges wrap, add portals, go hexagonal, etc.
-        """
+        """The 8 cells surrounding this one (minus anything off the edge)."""
         for dy in (-1, 0, 1):
             for dx in (-1, 0, 1):
                 if dx == 0 and dy == 0:
@@ -38,10 +31,7 @@ class Grid:
         return sum(self.cells[ny, nx] for nx, ny in self.get_neighbors(x, y))
 
     def next_state(self, current: CellState, neighbor_count: int) -> CellState:
-        """Conway's rules: birth on 3, survive on 2-3, die otherwise.
-
-        Override this to play with different rule sets.
-        """
+        """Conway's rules: birth on 3, survive on 2-3, die otherwise."""
         if current == 1:
             return 1 if neighbor_count in (2, 3) else 0
         else:
@@ -80,17 +70,10 @@ class Grid:
         self.generation = 0
 
 class ToroidalGrid(Grid):
-    """A slightly different world where cells live and die.
-
-    Neighbor logic is its own method so you can subclass and
-    make weird topologies - toruses, hexagons, whatever.
-    """
+    """A slightly different world where cells live and die, the edges wrap in this one"""
 
     def get_neighbors(self, x: int, y: int) -> Iterator[Position]:
-        """The 8 cells surrounding this one (minus anything off the edge).
-
-        Override this to make edges wrap, add portals, go hexagonal, etc.
-        """
+        """The 8 cells surrounding this one, the edges wrap on all sides"""
         for dy in (-1, 0, 1):
             for dx in (-1, 0, 1):
                 if dx == 0 and dy == 0:

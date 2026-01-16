@@ -137,10 +137,11 @@ class Visualizer:
         self.buttons["YlOrRd"].on_clicked(lambda _: self._set_cmap("YlOrRd"))
 
     def _set_display_mode(self, mode: str) -> None:
-        """Switch display mode and update colormap."""
+        """Switch display mode"""
         self.display_mode = mode
 
     def _set_cmap(self, colorway: str) -> None:
+        """Switch colorway mode"""
         self.img.set_cmap(colorway)
         self.heatmap_img.set_cmap(colorway)
 
@@ -151,6 +152,7 @@ class Visualizer:
             self.ax.set_title(f"Generation {self.grid.generation}")
 
     def _update_ages(self) -> None:
+        """Update age of each cell."""
         self.age_grid[(self.grid.cells == 1)] += 1
         self.historical_grid[(self.grid.cells == 1)] += 1
 
@@ -169,6 +171,7 @@ class Visualizer:
         self.population_history.append(int(np.sum(self.grid.cells)))
 
     def _update_decay(self, previous_cells: np.ndarray) -> None:
+        """Updates the decay of each cell"""
         just_died = (previous_cells == 1) & (self.grid.cells == 0)
         self.decay_grid[just_died] = 1
 
@@ -178,6 +181,7 @@ class Visualizer:
         self.decay_grid[self.grid.cells == 1] = 0
 
     def _get_decay_display(self) -> np.ndarray:
+        """Creates representation of the grid decay state"""
         display = np.zeros_like(self.decay_grid)
         display[self.grid.cells == 1] = 1.0
         fading = (self.grid.cells == 0) & (self.decay_grid <= self.decay_frames)
@@ -185,6 +189,7 @@ class Visualizer:
         return display
 
     def _get_age_display(self) -> np.ndarray:
+        """Creates representation of the grid age state"""
         display = np.zeros_like(self.age_grid)
         display[self.grid.cells > 0] = 0.15 + 0.9 * np.minimum(
             (self.age_grid[self.grid.cells > 0] / self.max_age_display), 1.0)
