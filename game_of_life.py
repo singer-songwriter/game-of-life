@@ -69,11 +69,10 @@ class Grid:
         self.cells.fill(0)
         self.generation = 0
 
-class ToroidalGrid(Grid):
-    """A slightly different world where cells live and die, the edges wrap in this one"""
+class ToroidalMixin:
+    """Mixin for wrapping edge topology."""
 
     def get_neighbors(self, x: int, y: int) -> Iterator[Position]:
-        """The 8 cells surrounding this one, the edges wrap on all sides"""
         for dy in (-1, 0, 1):
             for dx in (-1, 0, 1):
                 if dx == 0 and dy == 0:
@@ -81,6 +80,73 @@ class ToroidalGrid(Grid):
                 nx = (x + dx) % self.width
                 ny = (y + dy) % self.height
                 yield (nx, ny)
+
+
+class ProbabilisticMixin:
+    """Mixin for probabilistic rules with uniform certainty."""
+    certainty: float = 0.9
+
+    def next_state(self, current: CellState, neighbor_count: int) -> CellState:
+        if current == 1:
+            intended = 1 if neighbor_count in (2, 3) else 0
+        else:
+            intended = 1 if neighbor_count == 3 else 0
+
+        if np.random.random() < self.certainty:
+            return intended
+        else:
+            return 1 - intended
+
+
+class GraduatedMixin:
+    """Mixin for graduated probability rules."""
+
+    def next_state(self, current: CellState, neighbor_count: int) -> CellState:
+        if current == 1:
+            if neighbor_count < 2:
+                prob = 0.1
+            elif neighbor_count in (2, 3):
+                prob = 0.95
+            else:
+                prob = 0.2
+            return 1 if np.random.random() < prob else 0
+        else:
+            if neighbor_count == 3:
+                prob = 0.9
+            elif neighbor_count == 2:
+                prob = 0.1
+            else:
+                prob = 0.01
+            return 1 if np.random.random() < prob else 0
+
+
+def create_grid(
+    width: int,
+    height: int,
+    toroidal: bool = False,
+    rules: str = "conway",
+    certainty: float = 0.9,
+) -> Grid:
+    """Factory function to create a grid with the specified topology and rules."""
+    bases: list[type] = []
+
+    if toroidal:
+        bases.append(ToroidalMixin)
+
+    if rules == "probabilistic":
+        bases.append(ProbabilisticMixin)
+    elif rules == "graduated":
+        bases.append(GraduatedMixin)
+
+    bases.append(Grid)
+
+    grid_class = type("DynamicGrid", tuple(bases), {})
+    grid = grid_class(width, height)
+
+    if rules == "probabilistic":
+        grid.certainty = certainty
+
+    return grid
 
 
 # Some classic patterns to play with

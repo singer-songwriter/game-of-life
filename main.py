@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
-from game_of_life import Grid, ToroidalGrid, PATTERNS
+from game_of_life import create_grid, PATTERNS
 from visualizer import Visualizer
 
 
@@ -61,13 +61,29 @@ def main() -> None:
         action="store_true",
         help="Use toroidal grid (wrapping edges)",
     )
-
+    parser.add_argument(
+        "-r", "--rules",
+        choices=["conway", "probabilistic", "graduated"],
+        default="conway",
+        help="Rule variant (default: conway)",
+    )
+    parser.add_argument(
+        "-c", "--certainty",
+        type=float,
+        default=0.9,
+        help="Certainty for probabilistic rules 0-1 (default: 0.9)",
+    )
     args = parser.parse_args()
 
     width = args.width or args.size
     height = args.height or args.size
 
-    grid = ToroidalGrid(width, height) if args.toroidal else Grid(width, height)
+    grid = create_grid(
+        width, height,
+        toroidal=args.toroidal,
+        rules=args.rules,
+        certainty=args.certainty,
+    )
 
     if args.pattern == "random":
         grid.randomize(args.density)
