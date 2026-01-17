@@ -1,6 +1,19 @@
 # Game of Life
 Conway's Game of Life in Python with matplotlib visualizations.
 
+## Installation
+
+Requires Python 3.6+
+
+```bash
+pip install -r requirements.txt
+```
+
+Or install manually:
+```bash
+pip install numpy matplotlib pygame
+```
+
 ## Usage
 
 ```bash
