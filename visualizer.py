@@ -7,6 +7,12 @@ import numpy as np
 
 from game_of_life import Grid
 
+try:
+    from sonifier import Sonifier
+    SOUND_AVAILABLE = True
+except ImportError:
+    SOUND_AVAILABLE = False
+
 
 class Visualizer:
     """Draws the grid and animates it with matplotlib."""
@@ -16,6 +22,8 @@ class Visualizer:
         grid: Grid,
         cmap: str | ListedColormap = "binary",
         figsize: tuple[float, float] = (8, 8),
+        sound_enabled: bool = False,
+        base_freq: float = 110.0,
     ) -> None:
         self.grid = grid
         self.cmap = cmap
@@ -40,6 +48,10 @@ class Visualizer:
 
         self.buttons: dict[str, Button] = {}
 
+        self._sound_enabled = sound_enabled and SOUND_AVAILABLE
+        self._base_freq = base_freq
+        self.sonifier: Sonifier | None = None
+
     def _setup_figure(self) -> None:
         """Get the matplotlib window ready."""
 
@@ -57,6 +69,16 @@ class Visualizer:
         self._setup_buttons()
         self._record_population()
         self._update_title()
+
+        # Initialize sonifier if enabled
+        if self._sound_enabled:
+            self.sonifier = Sonifier(base_freq=self._base_freq)
+        self.fig.canvas.mpl_connect('close_event', self._on_close)
+
+    def _on_close(self, event: Any) -> None:
+        """Handle figure close event."""
+        if self.sonifier:
+            self.sonifier.cleanup()
 
     def _setup_grid_axes(self) -> None:
         """Configure the main grid display."""
@@ -129,12 +151,23 @@ class Visualizer:
         self.buttons["binary"] = Button(ax_binary, "Binary")
         self.buttons["YlOrRd"] = Button(ax_YlOrRd, "YlOrRd")
 
-
         self.buttons["normal"].on_clicked(lambda _: self._set_display_mode("normal"))
         self.buttons["decay"].on_clicked(lambda _: self._set_display_mode("decay"))
         self.buttons["age"].on_clicked(lambda _: self._set_display_mode("age"))
         self.buttons["binary"].on_clicked(lambda _: self._set_cmap("binary"))
         self.buttons["YlOrRd"].on_clicked(lambda _: self._set_cmap("YlOrRd"))
+
+        if self._sound_enabled:
+            self._ax_sound = plt.axes([right_end - button_width - 2 * button_spacing, button_y, button_width, button_height])
+            self._btn_sound = Button(self._ax_sound, "Sound: On")
+            self._btn_sound.on_clicked(self._toggle_sound)
+
+    def _toggle_sound(self, event: Any) -> None:
+        """Toggle sound on/off."""
+        if self.sonifier:
+            enabled = self.sonifier.toggle()
+            self._btn_sound.label.set_text(f"Sound: {'On' if enabled else 'Off'}")
+            self.fig.canvas.draw_idle()
 
     def _set_display_mode(self, mode: str) -> None:
         """Switch display mode"""
@@ -211,6 +244,18 @@ class Visualizer:
         self._update_decay(previous_cells)
         self._update_ages()
 
+        if self.sonifier and self.sonifier.enabled:
+            just_born = (previous_cells == 0) & (self.grid.cells == 1)
+            just_died = (previous_cells == 1) & (self.grid.cells == 0)
+
+            self.sonifier.update(
+                population=int(np.sum(self.grid.cells)),
+                max_population=self.grid.width * self.grid.height,
+                births=int(np.sum(just_born)),
+                deaths=int(np.sum(just_died)),
+                interval_ms=self._interval,
+            )
+
         if self.display_mode == "decay":
             self.img.set_array(self._get_decay_display())
         elif self.display_mode == "age":
@@ -238,6 +283,7 @@ class Visualizer:
         Returns the animation object if you're in a notebook.
         """
         self._setup_figure()
+        self._interval = interval
 
         self.anim = animation.FuncAnimation(
             self.fig,

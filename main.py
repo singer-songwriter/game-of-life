@@ -73,6 +73,17 @@ def main() -> None:
         default=0.9,
         help="Certainty for probabilistic rules 0-1 (default: 0.9)",
     )
+    parser.add_argument(
+        "--sound",
+        action="store_true",
+        help="Enable sonification (requires pygame)",
+    )
+    parser.add_argument(
+        "--base-freq",
+        type=float,
+        default=110.0,
+        help="Base frequency for sonification in Hz (default: 110, A2)",
+    )
     args = parser.parse_args()
 
     width = args.width or args.size
@@ -94,9 +105,10 @@ def main() -> None:
         offset_y = height // 4
         grid.set_pattern(pattern, (offset_x, offset_y))
 
-    viz = Visualizer(grid)
+    viz = Visualizer(grid, sound_enabled=args.sound, base_freq=args.base_freq,)
     viz.animate(generations=args.generations, interval=args.interval, save_path=args.output)
-    viz.show()
+    if not args.output:
+        viz.show()
 
 
 if __name__ == "__main__":
