@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Protocol
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from matplotlib.colors import ListedColormap
@@ -6,6 +6,83 @@ from matplotlib.widgets import Button
 import numpy as np
 
 from game_of_life import Grid
+
+
+class DisplayMode(Protocol):
+    """Protocol for display mode implementations."""
+    def update(self, previous_cells: np.ndarray, current_cells: np.ndarray) -> None: ...
+    def get_display(self, current_cells: np.ndarray) -> np.ndarray: ...
+
+
+class NormalMode:
+    """Standard display - just shows current cell state."""
+
+    def update(self, previous_cells: np.ndarray, current_cells: np.ndarray) -> None:
+        pass
+
+    def get_display(self, current_cells: np.ndarray) -> np.ndarray:
+        return current_cells.astype(np.float32)
+
+
+class DecayMode:
+    """Shows trails of recently dead cells fading out."""
+
+    def __init__(self, grid_shape: tuple[int, int], decay_frames: int = 5) -> None:
+        self.decay_frames = decay_frames
+        self.decay_grid = np.zeros(grid_shape, dtype=np.float32)
+        self.decay_grid.fill(decay_frames + 1)
+
+    def update(self, previous_cells: np.ndarray, current_cells: np.ndarray) -> None:
+        just_died = (previous_cells == 1) & (current_cells == 0)
+        self.decay_grid[just_died] = 1
+
+        still_dead = (previous_cells == 0) & (current_cells == 0)
+        self.decay_grid[still_dead] += 1
+
+        self.decay_grid[current_cells == 1] = 0
+
+    def get_display(self, current_cells: np.ndarray) -> np.ndarray:
+        display = np.zeros_like(self.decay_grid)
+        display[current_cells == 1] = 1.0
+        fading = (current_cells == 0) & (self.decay_grid <= self.decay_frames)
+        display[fading] = 0.5 * (1.0 - (self.decay_grid[fading] / self.decay_frames))
+        return display
+
+
+class AgeMode:
+    """Shows cell age with brightness increasing over time."""
+
+    def __init__(self, grid_shape: tuple[int, int], max_age_display: int = 50) -> None:
+        self.max_age_display = max_age_display
+        self.age_grid = np.zeros(grid_shape, dtype=np.float32)
+
+    def update(self, previous_cells: np.ndarray, current_cells: np.ndarray) -> None:
+        self.age_grid[current_cells == 1] += 1
+        self.age_grid[current_cells == 0] = 0
+
+    def get_display(self, current_cells: np.ndarray) -> np.ndarray:
+        display = np.zeros_like(self.age_grid)
+        alive = current_cells > 0
+        display[alive] = 0.15 + 0.9 * np.minimum(
+            self.age_grid[alive] / self.max_age_display, 1.0
+        )
+        return display
+
+
+class HistoryTracker:
+    """Tracks cumulative cell activity for heatmap display."""
+
+    def __init__(self, grid_shape: tuple[int, int]) -> None:
+        self.historical_grid = np.zeros(grid_shape, dtype=np.float32)
+
+    def update(self, current_cells: np.ndarray) -> None:
+        self.historical_grid[current_cells == 1] += 1
+
+    def get_display(self) -> np.ndarray:
+        return self.historical_grid
+
+    def get_max(self) -> float:
+        return float(self.historical_grid.max())
 
 try:
     from sonifier import Sonifier
@@ -37,12 +114,9 @@ class Visualizer:
         self.pop_line: Any = None
         self.pop_ax: plt.Axes | None = None
         self.stats_text: Any = None
-        self.display_mode: str = "normal"
-        self.decay_frames: int = 5
-        self.decay_grid: np.ndarray | None = None
-        self.max_age_display: int = 50
-        self.age_grid: np.ndarray | None = None
-        self.historical_grid: np.ndarray | None = None
+        self._current_mode: str = "normal"
+        self._modes: dict[str, DisplayMode] = {}
+        self._history_tracker: HistoryTracker | None = None
         self.ax_heatmap: plt.Axes | None = None
         self.heatmap_img: Any = None
 
@@ -89,7 +163,7 @@ class Visualizer:
         self.ax.set_aspect("equal")
         self.img = self.ax.imshow(
             self.grid.cells.astype(np.float32),
-            cmap= self.cmap, #"YlOrRd"
+            cmap=self.cmap,
             interpolation="nearest",
             vmin=0,
             vmax=1,
@@ -104,10 +178,14 @@ class Visualizer:
             bbox=dict(boxstyle="round", facecolor="black", alpha=0.7),
         )
         self.stats_text.set_text(self._get_stats())
-        self.decay_grid = np.zeros_like(self.grid.cells, dtype=np.float32)
-        self.decay_grid[self.grid.cells == 0] = self.decay_frames + 1
-        self.age_grid = np.zeros_like(self.grid.cells, dtype=np.float32)
-        self.historical_grid = np.zeros_like(self.grid.cells, dtype=np.float32)
+
+        grid_shape = self.grid.cells.shape
+        self._modes = {
+            "normal": NormalMode(),
+            "decay": DecayMode(grid_shape),
+            "age": AgeMode(grid_shape),
+        }
+        self._history_tracker = HistoryTracker(grid_shape)
 
     def _setup_population_axes(self) -> None:
         """Configure the population history plot."""
@@ -121,7 +199,7 @@ class Visualizer:
         self.ax_heatmap.set_title("Life Heatmap")
         self.ax_heatmap.tick_params(length=0, labelbottom=False, labelleft=False)
         self.heatmap_img = self.ax_heatmap.imshow(
-            self.historical_grid,
+            np.zeros_like(self.grid.cells, dtype=np.float32),
             cmap="binary",
             interpolation="nearest",
             vmin=0,
@@ -171,7 +249,7 @@ class Visualizer:
 
     def _set_display_mode(self, mode: str) -> None:
         """Switch display mode"""
-        self.display_mode = mode
+        self._current_mode = mode
 
     def _set_cmap(self, colorway: str) -> None:
         """Switch colorway mode"""
@@ -183,13 +261,6 @@ class Visualizer:
         """Show which generation we're on."""
         if self.ax:
             self.ax.set_title(f"Generation {self.grid.generation}")
-
-    def _update_ages(self) -> None:
-        """Update age of each cell."""
-        self.age_grid[(self.grid.cells == 1)] += 1
-        self.historical_grid[(self.grid.cells == 1)] += 1
-
-        self.age_grid[(self.grid.cells == 0)] = 0
 
     def _get_stats(self) -> str:
         """Calculate statistics on the game"""
@@ -203,46 +274,15 @@ class Visualizer:
         self.generation_history.append(self.grid.generation)
         self.population_history.append(int(np.sum(self.grid.cells)))
 
-    def _update_decay(self, previous_cells: np.ndarray) -> None:
-        """Updates the decay of each cell"""
-        just_died = (previous_cells == 1) & (self.grid.cells == 0)
-        self.decay_grid[just_died] = 1
-
-        still_dead = (previous_cells == 0) & (self.grid.cells == 0)
-        self.decay_grid[still_dead] += 1
-
-        self.decay_grid[self.grid.cells == 1] = 0
-
-    def _get_decay_display(self) -> np.ndarray:
-        """Creates representation of the grid decay state"""
-        display = np.zeros_like(self.decay_grid)
-        display[self.grid.cells == 1] = 1.0
-        fading = (self.grid.cells == 0) & (self.decay_grid <= self.decay_frames)
-        display[fading] = 0.5 * (1.0 - (self.decay_grid[fading] / self.decay_frames))
-        return display
-
-    def _get_age_display(self) -> np.ndarray:
-        """Creates representation of the grid age state"""
-        display = np.zeros_like(self.age_grid)
-        display[self.grid.cells > 0] = 0.15 + 0.9 * np.minimum(
-            (self.age_grid[self.grid.cells > 0] / self.max_age_display), 1.0)
-        return display
-
-    def _update_heatmap(self) -> None:
-        """Update the 2D heatmap with cumulative life history."""
-        max_val = self.historical_grid.max()
-        self.heatmap_img.set_array(self.historical_grid)
-        if max_val > 0:
-            self.heatmap_img.set_clim(0, max_val)
-
     def _animate_frame(self, frame: int) -> tuple[Any, ...]:
         """Called each frame - step the sim and redraw."""
         previous_cells = self.grid.cells.copy()
         self.grid.step()
         self._record_population()
 
-        self._update_decay(previous_cells)
-        self._update_ages()
+        for mode in self._modes.values():
+            mode.update(previous_cells, self.grid.cells)
+        self._history_tracker.update(self.grid.cells)
 
         if self.sonifier and self.sonifier.enabled:
             just_born = (previous_cells == 0) & (self.grid.cells == 1)
@@ -256,19 +296,19 @@ class Visualizer:
                 interval_ms=self._interval,
             )
 
-        if self.display_mode == "decay":
-            self.img.set_array(self._get_decay_display())
-        elif self.display_mode == "age":
-            self.img.set_array(self._get_age_display())
-        else:
-            self.img.set_array(self.grid.cells)
+        self.img.set_array(self._modes[self._current_mode].get_display(self.grid.cells))
 
         self._update_title()
         self.pop_line.set_data(self.generation_history, self.population_history)
         self.pop_ax.relim()
         self.pop_ax.autoscale_view()
         self.stats_text.set_text(self._get_stats())
-        self._update_heatmap()
+
+        max_val = self._history_tracker.get_max()
+        self.heatmap_img.set_array(self._history_tracker.get_display())
+        if max_val > 0:
+            self.heatmap_img.set_clim(0, max_val)
+
         return (self.img, self.pop_line, self.stats_text, self.heatmap_img)
 
     def animate(
