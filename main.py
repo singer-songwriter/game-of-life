@@ -6,6 +6,7 @@ from visualizer import Visualizer
 
 
 def main() -> None:
+    """Parse args and kick off the simulation."""
     parser = argparse.ArgumentParser(
         description="Conway's Game of Life",
         formatter_class=argparse.RawDescriptionHelpFormatter,

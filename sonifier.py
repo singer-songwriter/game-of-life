@@ -9,22 +9,16 @@ except ImportError:
     PYGAME_AVAILABLE = False
 
 class Sonifier:
+    """Turns simulation state into audio feedback via pygame."""
 
     def __init__(
-        self, 
-        sample_rate = 44100,
-        buffer_size = 2048,
-        bit_depth = -16,
-        base_freq = 110.0
+        self,
+        sample_rate: int = 44100,
+        buffer_size: int = 2048,
+        bit_depth: int = -16,
+        base_freq: float = 110.0
     ) -> None:
-        """
-        Initialize the sonifier.
-
-        Args:
-            sample_rate: Audio sample rate in Hz.
-            buffer_size: pygame mixer buffer size (lower = less latency, more CPU).
-            base_freq: Base frequency for the drone in Hz (default A2 = 110Hz).
-        """
+        """Set up the audio system. base_freq is the root note (default A2)."""
         if not PYGAME_AVAILABLE:
             self.enabled = False
             return
@@ -52,18 +46,7 @@ class Sonifier:
         amplitude: float = 0.3,
         pan: float = 0.5,
     ) -> pygame.mixer.Sound:
-        """
-        Generate a sine wave tone with harmonics.
-
-        Args:
-            freq: Fundamental frequency in Hz.
-            duration: Tone duration in seconds.
-            amplitude: Volume (0.0 to 1.0).
-            pan: Stereo position (0.0 = left, 0.5 = center, 1.0 = right).
-
-        Returns:
-            pygame.mixer.Sound object ready to play.
-        """
+        """Create a sine wave with harmonics, faded edges, and stereo panning."""
         n_samples = int(self.sample_rate * duration)
         t = np.linspace(0, duration, n_samples, dtype=np.float32)
 
@@ -94,11 +77,11 @@ class Sonifier:
         self,
         population: int,
         max_population: int,
-        births: int, 
+        births: int,
         deaths: int,
         interval_ms: int
     ) -> None:
-        
+        """Play a tone based on current state. Pitch=population, volume=activity, pan=volatility."""
         if not self.enabled:
             return
         duration = interval_ms / 1000.0
@@ -144,12 +127,7 @@ class Sonifier:
             self.activity_channel.play(birth_tone)
     
     def toggle(self) -> bool:
-        """
-        Toggle sound on/off.
-
-        Returns:
-            New enabled state.
-        """
+        """Toggle sound on/off. Returns the new enabled state."""
         if not PYGAME_AVAILABLE:
             return False
 
