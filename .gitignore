@@ -10,4 +10,4 @@ build/
 *.mp4
 .documentation/
 .ignore/
-.test_game_of_life.py
+test_game_of_life.py

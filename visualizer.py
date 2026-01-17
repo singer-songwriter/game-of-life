@@ -112,6 +112,8 @@ class Visualizer:
         self.population_history: list[int] = []
         self.generation_history: list[int] = []
         self.pop_line: Any = None
+        self.pop_fill: Any = None
+        self.pop_avg_line: Any = None
         self.pop_ax: plt.Axes | None = None
         self.stats_text: Any = None
         self._current_mode: str = "normal"
@@ -192,7 +194,11 @@ class Visualizer:
         self.pop_ax.set_xlabel("Generation")
         self.pop_ax.set_ylabel("Population")
         self.pop_ax.set_title("Population Over Time")
-        (self.pop_line,) = self.pop_ax.plot([], [], color="black", linewidth=1.5)
+        self.pop_ax.grid(True, alpha=0.3, linestyle="-", linewidth=0.5)
+        (self.pop_line,) = self.pop_ax.plot([], [], color="steelblue", linewidth=1.5, label="Population")
+        (self.pop_avg_line,) = self.pop_ax.plot([], [], color="tomato", linewidth=2, alpha=0.8, label="Rolling Avg")
+        self.pop_fill = self.pop_ax.fill_between([], [], color="steelblue", alpha=0.2)
+        self.pop_ax.legend(loc="upper right", fontsize=8)
 
     def _setup_heatmap_axes(self) -> None:
         """Configure the 2D life history heatmap."""
@@ -300,6 +306,21 @@ class Visualizer:
 
         self._update_title()
         self.pop_line.set_data(self.generation_history, self.population_history)
+
+        # Update fill under curve
+        self.pop_fill.remove()
+        self.pop_fill = self.pop_ax.fill_between(
+            self.generation_history, self.population_history,
+            color="steelblue", alpha=0.2
+        )
+
+        # Calculate and update rolling average
+        window = 20
+        if len(self.population_history) >= window:
+            avg = np.convolve(self.population_history, np.ones(window)/window, mode="valid")
+            avg_gens = self.generation_history[window-1:]
+            self.pop_avg_line.set_data(avg_gens, avg)
+
         self.pop_ax.relim()
         self.pop_ax.autoscale_view()
         self.stats_text.set_text(self._get_stats())
